@@ -1,10 +1,20 @@
-/*****************************************************************************
- * Copyright (C) 2014-2015
- * file:    librpc.c
- * author:  gozfree <gozfree@163.com>
- * created: 2015-05-07 00:00
- * updated: 2015-08-01 23:51
- *****************************************************************************/
+/******************************************************************************
+ * Copyright (C) 2014-2018 Zhifeng Gong <gozfree@163.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with libraries; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ ******************************************************************************/
 #include <string.h>
 #include <sys/time.h>
 #include <sys/uio.h>
@@ -190,7 +200,7 @@ int rpc_recv(struct rpc *r, void *buf, size_t len)
     if (len < pkt->header.payload_len) {
         loge("skt_recv pkt.header.len = %d\n", pkt->header.payload_len);
     }
-    rlen = MIN(len, pkt->header.payload_len);
+    rlen = MIN2(len, pkt->header.payload_len);
     ret = skt_recv(r->fd, buf, rlen);
     if (ret == 0) {
         loge("peer connect closed\n");
@@ -237,7 +247,7 @@ static void on_read(int fd, void *arg)
 
     if (r->state == rpc_inited) {
         r->send_pkt.header.uuid_src = *(uint32_t *)pkt->payload;
-        thread_sem_signal(r->dispatch_thread);
+        thread_signal(r->dispatch_thread);
         r->state = rpc_connected;
     } else if (r->state == rpc_connected) {
         struct iovec buf;
@@ -245,7 +255,7 @@ static void on_read(int fd, void *arg)
         buf.iov_base = pkt->payload;
         process_msg(r, &buf);
         //free(pkt->payload);
-        thread_sem_signal(r->dispatch_thread);
+        thread_signal(r->dispatch_thread);
     }
 }
 
@@ -303,7 +313,7 @@ struct rpc *rpc_create(const char *host, uint16_t port)
     r->dispatch_thread = thread_create(rpc_dispatch_thread, r);
 
     r->state = rpc_inited;
-    if (thread_sem_wait(r->dispatch_thread, 2000) == -1) {
+    if (thread_wait(r->dispatch_thread, 2000) == -1) {
         loge("wait response failed %d:%s\n", errno, strerror(errno));
         return NULL;
     }
@@ -449,7 +459,7 @@ int rpc_call(struct rpc *r, uint32_t msg_id,
         return -1;
     }
     if (IS_RPC_MSG_NEED_RETURN(msg_id)) {
-        if (thread_sem_wait(r->dispatch_thread, 2000) == -1) {
+        if (thread_wait(r->dispatch_thread, 2000) == -1) {
             loge("wait response failed %d:%s\n", errno, strerror(errno));
             return -1;
         }
